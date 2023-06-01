@@ -20,27 +20,42 @@ var eventsMediator = {
 var moviesComponent =
 {   
     data:[],
-
+    currentPage: 1,
 
     init: async function(){
         this.cacheElements()
         this.bindEvents()
-        await this.fetchMoviesApi()
+        await this.fetchMoviesApi(1)
         this.render()
     },
 
     cacheElements: function(){
         this.body = $("body")
         this.cards_wrapper = $('#cards-wrapper');
+        this.prevBtn = $("#previousBtn")
+        this.nextBtn = $("#nextBtn")
         
     },
     bindEvents: function(){
         eventsMediator.on('renderMovies',this.fetchMoviesApi.bind(this))
+        $(this.prevBtn).click(this.previousBtnFetch.bind(this));
+        $(this.nextBtn).click(this.nextBtnFetch.bind(this));
     },
     getAllMovies: function(){
         return this.data
     },
+    previousBtnFetch: function(){
+        if(this.currentPage != 1){
+            this.currentPage--
+            eventsMediator.emit('renderMovies', this.currentPage)
+        }
+    },
+    nextBtnFetch: function(){
+        this.currentPage++
+        eventsMediator.emit('renderMovies', this.currentPage)
+    },
     
+
     setMoviesData: function(movies){
         this.data = movies
         this.render()
@@ -48,9 +63,9 @@ var moviesComponent =
     setCurrentMovie: function(movie){
         this.currentSelectedMovie = movie
     },
-    fetchMoviesApi: async function(){
-
-        const response = await fetch('https://api.themoviedb.org/3/movie/popular?language=en-US&page=1',
+    fetchMoviesApi: async function(page){
+        console.log("Page: ", page)
+        const response = await fetch(`https://api.themoviedb.org/3/movie/popular?language=en-US&page=${page}`,
                     { method: 'GET',
                     headers: {
                         accept: 'application/json',
@@ -59,10 +74,13 @@ var moviesComponent =
                     );
         const movies = await response.json();
         this.setMoviesData(movies.results)
+        eventsMediator.emit('movieStats', movies)
+        this.render()
         return movies
     },
     render: function(){
         var movies = this.data
+        var currentPage = this.currentPage
         this.cards_wrapper.html("");
         for (let i = 0; i < movies.length; i++) {
             this.cardCol = $('<div class="col-md-3 mb-3"></div>')
@@ -86,10 +104,60 @@ var moviesComponent =
     }
 }
 
+var statsComponent = {
+    // movieStats: {},
+
+
+init: function(){
+    this.cachedElements()
+    this.bindEvents()
+},
+
+cachedElements: function(){
+    this.container = $('.container')
+    this.moviestatsHTML = $('.movies')
+},
+
+bindEvents:function(){
+    eventsMediator.on('movieStats', this.setMovieStats.bind(this))
+},
+
+setMovieStats: function(movies){
+
+    let top_rated_movie = ''
+    let highest_rate = 0
+    movies.results.forEach(element => {
+        if (element.vote_average > highest_rate){
+            highest_rate = element.vote_average
+            top_rated_movie = element.title
+        }
+    });
+    this.movieStats = {currentPage: movies.page, movie_Num: movies.results.length, top_rated: top_rated_movie, rating: highest_rate}
+    this.render()
+},
+
+render: function(){
+    this.moviestatsHTML.html("")
+    this.movieStatTemp = `<h1>Movies</h1>
+    <div id="movies-stats" class="mb-5 ">
+        <h2>Stats</h2>
+        <p class="m-1">Current page: ${this.movieStats.currentPage}</p>
+        <p class="m-1">Number of movies: ${this.movieStats.movie_Num}</p>
+        <p class="m-1">Top rated movie: ${this.movieStats.top_rated}</p>
+        <p class="m-1">Rating: ${this.movieStats.rating}</p>
+    </div>`
+
+    this.moviestatsHTML.append(this.movieStatTemp)
+}
+}
+
+
+
 
 
 var modalComponent = {
     currentSelectedMovie: null,
+    // currentPage: 1,
     
     init: function(){
         this.cacheElements()
@@ -142,7 +210,7 @@ var modalComponent = {
     $(document).on('click','#modal-close-btn,#modal-close-icon' ,function () {
         $("#modal_popup").remove();
         $("body").css("overflow", "scroll");
-        eventsMediator.emit('renderMovies')
+        // eventsMediator.emit('renderMovies')
     });
     this.body.append(this.modal_popup_temp)
 
@@ -152,6 +220,7 @@ var modalComponent = {
 }
 
 $(document).ready(function () {
+    statsComponent.init()
     moviesComponent.init()
     modalComponent.init()
 });
